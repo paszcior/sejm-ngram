@@ -1,5 +1,7 @@
 package org.sejmngram.database.fetcher.connection;
 
+import java.util.Set;
+
 import org.sejmngram.database.fetcher.converter.IdConverter;
 import org.sejmngram.database.fetcher.converter.NgramFtsConverter;
 import org.sejmngram.database.fetcher.json.datamodel.NgramResponse;
@@ -14,9 +16,10 @@ public class MySqlFtsDbConnector implements DbConnector {
     private NgramFtsDao ngramFtsDao;
 
     public MySqlFtsDbConnector(DBI jdbi, String partyFilename,
-            String poselFilename) {
+            String poselFilename, Set<String> dates) {
         this.jdbi = jdbi;
-        readIdFiles(partyFilename, poselFilename);
+        this.ngramFtsConverter = new NgramFtsConverter(
+                new IdConverter(partyFilename), new IdConverter(poselFilename), dates);
     }
 
     @Override
@@ -34,11 +37,6 @@ public class MySqlFtsDbConnector implements DbConnector {
         assert ngramFtsDao != null : "Dao object was not initialized";
         return ngramFtsConverter.dbRecordsToNgramResponse(ngram,
                 ngramFtsDao.searchFts(ngram));
-    }
-
-    private void readIdFiles(String partyFilename, String poselFilename) {
-        ngramFtsConverter = new NgramFtsConverter(
-                new IdConverter(partyFilename), new IdConverter(poselFilename));
     }
 
     @Override

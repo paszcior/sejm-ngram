@@ -2,6 +2,8 @@ package org.sejmngram.server;
 
 import io.dropwizard.Application;
 import io.dropwizard.assets.AssetsBundle;
+import io.dropwizard.elasticsearch.health.EsClusterHealthCheck;
+import io.dropwizard.elasticsearch.managed.ManagedEsClient;
 import io.dropwizard.jdbi.DBIFactory;
 import io.dropwizard.jdbi.bundles.DBIExceptionsBundle;
 import io.dropwizard.setup.Bootstrap;
@@ -11,6 +13,7 @@ import javax.servlet.DispatcherType;
 import javax.servlet.FilterRegistration.Dynamic;
 
 import org.eclipse.jetty.servlets.CrossOriginFilter;
+import org.sejmngram.server.config.RestApiConfiguration;
 import org.sejmngram.server.health.DatabaseHealthCheck;
 import org.sejmngram.server.health.RedisHealthCheck;
 import org.sejmngram.server.redis.RedisConnection;
@@ -23,11 +26,12 @@ import com.google.common.base.Optional;
 import java.util.EnumSet;
 
 public class RestApiApplication extends Application<RestApiConfiguration> {
-    
-    private static final int DB_HEALTH_CHECK_TIMEOUT = 15;
-    
+
+    // TODO introduce dependency injection?
     private RedisFactory redisFactory = new RedisFactory();
     private ResourceFactory ngramResourceFactory = new ResourceFactory(redisFactory);
+    private Optional<RedisConnection> redisConnection;
+    private ManagedEsClient elasticSearchClient;
 
     public static void main(String[] args) throws Exception {
         new RestApiApplication().run(args);
@@ -49,24 +53,37 @@ public class RestApiApplication extends Application<RestApiConfiguration> {
     }
 
     @Override
-    public void run(RestApiConfiguration config, Environment environment)
-            throws Exception {
-        environment.jersey().setUrlPattern("/service/*");
+    public void run(RestApiConfiguration config, Environment environment) {
 
-        DBI jdbi = new DBIFactory().build(environment, config.getDataSourceFactory(), "mysql");
+        registerElasticSearch(config, environment);
+        registerRedis(config, environment);
+        registerResources(config, environment);
 
-        Optional<RedisConnection> redisConnection = redisFactory.createRedisConnection(config.getRedis());
+        addCrossOriginFilter(environment);
+    }
+
+    private void registerResources(RestApiConfiguration config, Environment environment) {
+        environment.jersey().register(ngramResourceFactory.createElasticSearchNgramResource(
+                redisConnection, elasticSearchClient, config.getElasticsearch(), config.getSejmFilesConfig()));
+        environment.jersey().register(ngramResourceFactory.createHitCountResource(redisConnection));
+        // TODO healthchecks
+    }
+
+    private void registerRedis(RestApiConfiguration config, Environment environment) {
+        redisConnection = redisFactory.createRedisConnection(config.getRedis());
         if (redisConnection.isPresent()) {
             environment.lifecycle().manage(redisConnection.get());
             environment.healthChecks().register("redis", new RedisHealthCheck(redisConnection.get()));
         }
-        environment.healthChecks().register("database-jdbi", new DatabaseHealthCheck(jdbi, DB_HEALTH_CHECK_TIMEOUT));
+    }
 
-        environment.jersey().register(ngramResourceFactory.createFTSNgramResource(jdbi, redisConnection,
-                config.getPartiaIdFilename(), config.getPartiaIdFilename()));
-        environment.jersey().register(ngramResourceFactory.createHitCountResource(redisConnection));
-
-        addCrossOriginFilter(environment);
+    private void registerElasticSearch(RestApiConfiguration config, Environment environment) {
+        if (config.getElasticsearch() != null) {
+            elasticSearchClient = new ManagedEsClient(config.getElasticsearch());
+            environment.lifecycle().manage(elasticSearchClient);
+            environment.healthChecks().register("ElasticSearch cluster health",
+                    new EsClusterHealthCheck(elasticSearchClient.getClient()));
+        }
     }
 
     private void addCrossOriginFilter(Environment environment) {

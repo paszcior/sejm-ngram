@@ -1,4 +1,4 @@
-package org.sejmngram.server;
+package org.sejmngram.server.config;
 
 import io.dropwizard.Configuration;
 import io.dropwizard.db.DataSourceFactory;
@@ -59,5 +59,10 @@ public class RestApiConfiguration extends Configuration {
 
     public String getDatesFilename() {
         return datesFilename;
+    }
+
+    public SejmFilesConfiguration getSejmFilesConfig() {
+        return new SejmFilesConfiguration(getPartiaIdFilename(),
+                getPoselIdFilename(), getDatesFilename());
     }
 }

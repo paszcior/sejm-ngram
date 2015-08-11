@@ -1,13 +1,24 @@
 server:
   type: simple
+  rootPath: /service/*
   applicationContextPath: /
   adminContextPath: /admin
   connector:
     type: http
     port: 8080
+  requestLog:
+    appenders:
+      - type: file
+        threshold: ALL
+        currentLogFilename: sejmngram-request.log
+        archive: true
+        archivedLogFilenamePattern: sejmngram-request-%d.log
+        archivedFileCount: 5
+        timeZone: UTC
 
 partiaIdFilename: ../psc-data/partiaId.json
 poselIdFilename: ../psc-data/poselId.json
+datesFilename: ../psc-data/nowe_daty.txt
 
 database:
   # the name of your JDBC driver
@@ -50,12 +61,20 @@ database:
 
   # The default level of all loggers. Can be OFF, ERROR, WARN, INFO, DEBUG, TRACE, or ALL.
 logging:
-  level: DEBUG
+  level: INFO
 
   loggers:
     "io.dropwizard": INFO
     "org.eclipse.jetty": WARN
+    "org.elasticsearch": INFO
+    "org.sejmngram": TRACE
 
 #redis:
 #  host: localhost
 #  port: 6379
+
+elasticsearch:
+  clusterName: sejmngram-elasticsearch
+  settings:
+    node.name: sejmngram-elasticsearch-webclient
+    index: sejmngram
